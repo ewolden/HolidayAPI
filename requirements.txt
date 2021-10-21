@@ -4,6 +4,3 @@
 
 azure-functions
 holidays
-csv
-json
-datetime
