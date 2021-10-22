@@ -2,11 +2,14 @@ import logging
 
 import azure.functions as func
 import holidays
-from datetime import date
-from datetime import datetime
+from datetime import datetime, timedelta
 import json
 import io
 import csv
+
+def daterange(start_date, end_date):
+    for n in range(int((end_date - start_date).days)):
+        yield start_date + timedelta(n)
 
 
 def main(req: func.HttpRequest) -> func.HttpResponse:
@@ -14,6 +17,7 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
 
     country = req.params.get('country')
     query_date = req.params.get('date')
+    include_weekends = req.params.get('includeWeekends')
     response_type = req.headers.get('Content-Type')
 
     if not query_date:
@@ -30,10 +34,10 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
         )
     try:
         country_holidays = holidays.CountryHoliday(country)
-    except ImportError:
-        logging.error('Invalid country specified.')
+    except KeyError:
+        logging.error('Invalid country "{}" specified.'.format(country))
         return func.HttpResponse(
-             'Invalid country specified.',
+             'Invalid country "{}" specified.'.format(country),
              status_code=400
         )
     else:
@@ -43,24 +47,48 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
         response_type = 'application/json'
     else:
         if response_type not in ['application/json', 'application/csv']:
-            logging.error('Unknown content type, choose json or csv.')
+            logging.error('Unknown content type "{}", choose json or csv.'.format(response_type))
             return func.HttpResponse(
-                'Unknown content type, choose json or csv.',
+                'Unknown content type "{}", choose json or csv.'.format(response_type),
                 status_code=400
             )
-    
+
+    if not include_weekends:
+        include_weekends = False
+    dict_holidays = []
     if len(query_date) > 10: #Dealing with a date range
-        list_of_holidays = country_holidays[query_date[:10]: query_date[10:]]
+        for day in daterange(datetime.strptime(query_date[:10], '%Y-%m-%d').date(), datetime.strptime(query_date[11:], '%Y-%m-%d').date()):
+            if day in country_holidays:
+                dict_holidays.append(
+                    {
+                        'Date': day.isoformat(),
+                        'Holiday': True,
+                        'Name': country_holidays.get(day)
+                    }
+                )
+            elif include_weekends and day.weekday() > 5:
+                dict_holidays.append(
+                    {
+                        'Date': day.isoformat(),
+                        'Holiday': True,
+                        'Name': 'Weekend'
+                    }
+                )
     else:
         if query_date in country_holidays:
-            list_of_holidays = date(datetime.strptime(query_date, '%Y-%m-%d'))
-    dict_holidays = []
-    if list_of_holidays:
-        for day in list_of_holidays:
             dict_holidays.append(
                 {
-                    'Date': day.isoformat(),
-                    'Holiday': True
+                    'Date': query_date,
+                    'Holiday': True,
+                    'Name': country_holidays.get(query_date)
+                }
+            )
+        elif include_weekends and query_date.weekday() > 5:
+            dict_holidays.append(
+                {
+                    'Date': query_date,
+                    'Holiday': True,
+                    'Name': 'Weekend'
                 }
             )
     
@@ -74,7 +102,7 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
     else:
         logging.info('Finished processing output succesfully, responding with CSV')
         output_csv = io.StringIO()
-        headernames = ['Date', 'Holiday']
+        headernames = ['Date', 'Holiday', 'Name']
         csv_writer = csv.DictWriter(output_csv, fieldnames=headernames, delimiter=';')
         csv_writer.writeheader()
         csv_writer.writerows(dict_holidays)
