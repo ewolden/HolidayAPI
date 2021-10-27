@@ -34,6 +34,7 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
         )
     try:
         country_holidays = holidays.CountryHoliday(country)
+        country_holidays.include_sundays = False
     except KeyError:
         logging.error('Invalid country "{}" specified.'.format(country))
         return func.HttpResponse(
@@ -108,7 +109,7 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
         csv_writer.writerows(dict_holidays)
         return func.HttpResponse(
             output_csv.getvalue(),
-            headers={'Content-Type': 'application/csv'},
+            headers={'Content-Type': 'text/csv'},
             status_code=200
         )
     
