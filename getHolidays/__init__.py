@@ -47,7 +47,7 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
     if not response_type:
         response_type = 'application/json'
     else:
-        if response_type not in ['application/json', 'application/csv']:
+        if response_type not in ['application/json', 'text/csv']:
             logging.error('Unknown content type "{}", choose json or csv.'.format(response_type))
             return func.HttpResponse(
                 'Unknown content type "{}", choose json or csv.'.format(response_type),
